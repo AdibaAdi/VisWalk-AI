@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Start – VisWalk</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>Navigation Started</h1>
+    <p>We are now preparing your walking experience.</p>
+    <p id="location">Getting your location...</p>
+    <a href="/" class="btn">Return Home</a>
+  </div>
+
+  <script>
+    function speakAndListen(prompt) {
+      const msg = new SpeechSynthesisUtterance(prompt);
+      msg.lang = "en-US";
+      msg.onend = () => {
+        listenForCommand();
+      };
+      speechSynthesis.speak(msg);
+    }
+
+    function listenForCommand() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onresult = function(event) {
+        const command = event.results[0][0].transcript.toLowerCase();
+        console.log("Heard command:", command);
+
+        if (command.includes("navigation")) {
+          window.location.href = "/navigate";
+        } else if (command.includes("detection")) {
+          window.location.href = "/detect";
+        } else if (command.includes("go back") || command.includes("home")) {
+          window.location.href = "/";
+        } else if (command.includes("exit")) {
+          speechSynthesis.speak(new SpeechSynthesisUtterance("Exiting VisWalk. Goodbye."));
+        } else {
+          speakAndListen("Sorry, I didn’t catch that. Say navigation, detection, go back, or exit.");
+        }
+      };
+
+      recognition.onend = () => {
+        setTimeout(() => {
+          speakAndListen("Still here. Say navigation mode, obstacle detection, or exit.");
+        }, 10000);
+      };
+
+      recognition.start();
+    }
+
+    window.onload = () => {
+      speakAndListen("Welcome to the start page. Would you like to begin navigation or obstacle detection?");
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        const lat = pos.coords.latitude.toFixed(5);
+        const lon = pos.coords.longitude.toFixed(5);
+        document.getElementById("location").innerText = `Your location: ${lat}, ${lon}`;
+      },
+      function() {
+        document.getElementById("location").innerText = "Location access denied.";
+      }
+    );
+  </script>
+</body>
+</html>

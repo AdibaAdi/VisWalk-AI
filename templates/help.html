@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Help – VisWalk</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>Need Help?</h1>
+
+    <!-- Description of voice commands -->
+    <p>You're on the right path. Here's what you can say:</p>
+    <ul style="text-align: left; max-width: 400px;">
+      <li><strong>"Start"</strong> – begin navigation</li>
+      <li><strong>"Help"</strong> – get usage instructions</li>
+      <li><strong>"Go back"</strong> – return to home</li>
+      <li><strong>"Exit"</strong> – end session (coming soon)</li>
+    </ul>
+
+    <!-- Button to return to home -->
+    <a href="/" class="btn">Return Home</a>
+  </div>
+
+  <script>
+    // ========== Speak + Listen Logic ==========
+    function speakAndListen(prompt) {
+      const msg = new SpeechSynthesisUtterance(prompt);
+      msg.lang = "en-US";
+
+      // When speaking ends, begin listening again
+      msg.onend = () => {
+        listenForCommand();
+      };
+
+      speechSynthesis.speak(msg);
+    }
+
+    // ========== Handle Voice Commands ==========
+    function listenForCommand() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onresult = function(event) {
+        const command = event.results[0][0].transcript.toLowerCase();
+        console.log("Heard command:", command);
+
+        // Route commands
+        if (command.includes("go back") || command.includes("home")) {
+          window.location.href = "/";
+        } else if (command.includes("exit")) {
+          const bye = new SpeechSynthesisUtterance("Exiting VisWalk. Stay safe.");
+          speechSynthesis.speak(bye);
+        } else if (command.includes("start")) {
+          window.location.href = "/start";
+        } else if (command.includes("help")) {
+          const info = new SpeechSynthesisUtterance("You are already on the help page. Say go back to return home.");
+          speechSynthesis.speak(info);
+        } else {
+          // Fallback response
+          speakAndListen("Sorry, I didn’t catch that. Say start, go back, or exit.");
+        }
+      };
+
+      recognition.onend = () => {
+        // If no speech detected, retry after 10 seconds
+        setTimeout(() => {
+          speakAndListen("Still here. Say start to begin, go back to return home, or say exit to leave.");
+        }, 10000);
+      };
+
+      recognition.start(); // Start listening
+    }
+
+    // ========== Initialize on Page Load ==========
+    window.onload = () => {
+      speakAndListen("You're now on the help page. You can say start, go back, or exit.");
+    };
+  </script>
+</body>
+</html>

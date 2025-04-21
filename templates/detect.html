@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Obstacle Detection – VisWalk</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>Obstacle Detection Only</h1>
+    <p>VisWalk will now help you walk safely by alerting you about obstacles ahead.</p>
+    <p>Camera is required. Please run the obstacle detection script in a separate window.</p>
+    <a href="/" class="btn">Return Home</a>
+  </div>
+
+  <script>
+    function speakAndListen(prompt) {
+      const msg = new SpeechSynthesisUtterance(prompt);
+      msg.lang = "en-US";
+      msg.onend = () => {
+        listenForCommand();
+      };
+      speechSynthesis.speak(msg);
+    }
+
+    function listenForCommand() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onresult = function(event) {
+        const command = event.results[0][0].transcript.toLowerCase();
+        console.log("Heard command:", command);
+
+        if (command.includes("go back") || command.includes("home")) {
+          window.location.href = "/";
+        } else if (command.includes("exit")) {
+          speechSynthesis.speak(new SpeechSynthesisUtterance("Exiting VisWalk. Stay safe."));
+        } else {
+          speakAndListen("Sorry, I didn’t catch that. Say go back or exit.");
+        }
+      };
+
+      recognition.onend = () => {
+        setTimeout(() => {
+          speakAndListen("Still here. Say go back to return home, or say exit to leave.");
+        }, 10000);
+      };
+
+      recognition.start();
+    }
+
+    window.onload = () => {
+      speakAndListen("Obstacle detection mode activated. Please begin walking. Say go back or exit anytime.");
+    };
+  </script>
+</body>
+</html>

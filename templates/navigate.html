@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Navigation Mode – VisWalk</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <style>
+    #map { height: 300px; width: 100%; margin-top: 20px; }
+    #destination-input { margin: 10px 0; padding: 10px; width: 80%; font-size: 16px; }
+    .mic-button { padding: 10px 20px; font-size: 16px; background: #0077b6; color: white; border: none; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Navigation + Obstacle Detection</h1>
+    <p>We’ll guide you and alert you about obstacles.</p>
+
+    <input id="destination-input" type="text" placeholder="Type or speak your destination..." />
+    <button class="mic-button" onclick="speakDestination()">🎤 Speak Destination</button>
+
+    <div id="map"></div>
+
+    <button class="btn" onclick="startDetection()">🚀 Start Obstacle Detection</button>
+    <a href="/" class="btn">Return Home</a>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+
+  <script>
+    function speakAndListen(prompt) {
+      const msg = new SpeechSynthesisUtterance(prompt);
+      msg.lang = "en-US";
+      msg.onend = () => {
+        listenForCommand();
+      };
+      speechSynthesis.speak(msg);
+    }
+
+    function listenForCommand() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onresult = function(event) {
+        const command = event.results[0][0].transcript.toLowerCase();
+        console.log("Heard command:", command);
+
+        if (command.includes("go back") || command.includes("home")) {
+          window.location.href = "/";
+        } else if (command.includes("exit")) {
+          speechSynthesis.speak(new SpeechSynthesisUtterance("Exiting VisWalk. Goodbye."));
+        } else {
+          speakAndListen("Sorry, I didn’t catch that. Say go back or exit.");
+        }
+      };
+
+      recognition.onend = () => {
+        setTimeout(() => {
+          speakAndListen("Still here. Say go back to return home, or say exit to leave.");
+        }, 10000);
+      };
+
+      recognition.start();
+    }
+
+    // Initial greeting + voice control
+    window.onload = () => {
+      speakAndListen("Navigation mode activated. Please type or speak your destination, then start obstacle detection.");
+    };
+
+    // Voice-based destination input
+    function speakDestination() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onresult = function(event) {
+        const spokenText = event.results[0][0].transcript;
+        document.getElementById("destination-input").value = spokenText;
+        speakRoute(spokenText);
+      };
+
+      recognition.start();
+    }
+
+    // Speak back the destination
+    function speakRoute(destination) {
+      const confirmMsg = new SpeechSynthesisUtterance(`Your destination is set to ${destination}. Starting guidance.`);
+      confirmMsg.lang = "en-US";
+      speechSynthesis.speak(confirmMsg);
+    }
+
+    // Start detection Python script
+    function startDetection() {
+      fetch('/start-detection')
+        .then(() => alert('Detection script started!'))
+        .catch(() => alert('Failed to start detection script.'));
+    }
+
+    // Set up map with current location
+    let map = L.map('map').setView([37.7749, -122.4194], 13); // Default
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      map.setView([lat, lon], 15);
+      L.marker([lat, lon]).addTo(map).bindPopup("You are here").openPopup();
+    });
+  </script>
+</body>
+</html>

@@ -9,8 +9,59 @@
   <div class="container">
     <img src="{{ url_for('static', filename='logo.png') }}" alt="VisWalk Logo" class="logo">
     <h1>VisWalk</h1>
-    <p>Empowering every step with smart vision.</p>
+    <p>Tap anywhere and speak. VisWalk is listening.</p>
     <a href="#" class="btn">Get Started</a>
   </div>
+
+  <script>
+    function speakAndListen(prompt) {
+      const msg = new SpeechSynthesisUtterance(prompt);
+      msg.lang = "en-US";
+      msg.onend = () => {
+        listenForCommand();
+      };
+      speechSynthesis.speak(msg);
+    }
+
+    function listenForCommand() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onresult = function(event) {
+        const command = event.results[0][0].transcript.toLowerCase();
+        console.log("Heard command:", command);
+
+        if (command.includes("help")) {
+          window.location.href = "/help";
+        } else if (command.includes("start")) {
+          window.location.href = "/start";
+        } else if (command.includes("exit")) {
+          const goodbye = new SpeechSynthesisUtterance("Exiting VisWalk. Goodbye.");
+          speechSynthesis.speak(goodbye);
+        } else {
+          speakAndListen("Sorry, I didn’t catch that. Say help to begin, or exit to leave.");
+        }
+      };
+
+      recognition.onend = () => {
+        // Restart the whole prompt + listening cycle
+        setTimeout(() => {
+          speakAndListen("Sorry, I didn't catch you speaking. Say help to begin, or say exit to leave.");
+        }, 10000); // 10 seconds
+      };
+
+      recognition.start();
+    }
+
+    function startVisWalk() {
+      speakAndListen("Welcome to VisWalk. I am your voice-assisted walking guide. Say help to begin.");
+    }
+
+    // Trigger when user taps or presses a key
+    window.addEventListener('click', startVisWalk, { once: true });
+    window.addEventListener('touchstart', startVisWalk, { once: true });
+    window.addEventListener('keydown', startVisWalk, { once: true });
+  </script>
 </body>
 </html>
