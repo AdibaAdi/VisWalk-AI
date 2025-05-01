@@ -1,3 +1,4 @@
+<!-- navigation.html (clean + modular version with simulated guidance) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,6 +10,7 @@
     #map { height: 300px; width: 100%; margin-top: 20px; }
     #destination-input { margin: 10px 0; padding: 10px; width: 80%; font-size: 16px; }
     .mic-button { padding: 10px 20px; font-size: 16px; background: #0077b6; color: white; border: none; border-radius: 8px; }
+    #status-message { margin-top: 10px; color: green; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -16,101 +18,148 @@
     <h1>Navigation + Obstacle Detection</h1>
     <p>We’ll guide you and alert you about obstacles.</p>
 
+    <!-- Voice destination input -->
     <input id="destination-input" type="text" placeholder="Type or speak your destination..." />
     <button class="mic-button" onclick="speakDestination()">🎤 Speak Destination</button>
 
+    <!-- Map container -->
     <div id="map"></div>
+    <div id="status-message"></div>
 
+    <!-- Control buttons -->
     <button class="btn" onclick="startDetection()">🚀 Start Obstacle Detection</button>
     <a href="/" class="btn">Return Home</a>
   </div>
 
-  <!-- Leaflet JS -->
+  <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
-
   <script>
-    function speakAndListen(prompt) {
-      const msg = new SpeechSynthesisUtterance(prompt);
-      msg.lang = "en-US";
-      msg.onend = () => {
-        listenForCommand();
-      };
-      speechSynthesis.speak(msg);
-    }
+    /* ========== Global Setup ========== */
+    let map = L.map('map').setView([37.7749, -122.4194], 13);
+    let currentLat = 37.7749, currentLon = -122.4194;
 
-    function listenForCommand() {
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-
-      recognition.onresult = function(event) {
-        const command = event.results[0][0].transcript.toLowerCase();
-        console.log("Heard command:", command);
-
-        if (command.includes("go back") || command.includes("home")) {
-          window.location.href = "/";
-        } else if (command.includes("exit")) {
-          speechSynthesis.speak(new SpeechSynthesisUtterance("Exiting VisWalk. Goodbye."));
-        } else {
-          speakAndListen("Sorry, I didn’t catch that. Say go back or exit.");
-        }
-      };
-
-      recognition.onend = () => {
-        setTimeout(() => {
-          speakAndListen("Still here. Say go back to return home, or say exit to leave.");
-        }, 10000);
-      };
-
-      recognition.start();
-    }
-
-    // Initial greeting + voice control
-    window.onload = () => {
-      speakAndListen("Navigation mode activated. Please type or speak your destination, then start obstacle detection.");
-    };
-
-    // Voice-based destination input
-    function speakDestination() {
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-
-      recognition.onresult = function(event) {
-        const spokenText = event.results[0][0].transcript;
-        document.getElementById("destination-input").value = spokenText;
-        speakRoute(spokenText);
-      };
-
-      recognition.start();
-    }
-
-    // Speak back the destination
-    function speakRoute(destination) {
-      const confirmMsg = new SpeechSynthesisUtterance(`Your destination is set to ${destination}. Starting guidance.`);
-      confirmMsg.lang = "en-US";
-      speechSynthesis.speak(confirmMsg);
-    }
-
-    // Start detection Python script
-    function startDetection() {
-      fetch('/start-detection')
-        .then(() => alert('Detection script started!'))
-        .catch(() => alert('Failed to start detection script.'));
-    }
-
-    // Set up map with current location
-    let map = L.map('map').setView([37.7749, -122.4194], 13); // Default
+    // Load map tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
+    // Geolocate and set current position
     navigator.geolocation.getCurrentPosition(pos => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      map.setView([lat, lon], 15);
-      L.marker([lat, lon]).addTo(map).bindPopup("You are here").openPopup();
+      currentLat = pos.coords.latitude;
+      currentLon = pos.coords.longitude;
+      map.setView([currentLat, currentLon], 15);
+      L.marker([currentLat, currentLon]).addTo(map).bindPopup("You are here").openPopup();
     });
+
+    /* ========== Voice Helpers ========== */
+    function speak(text, callback) {
+      const msg = new SpeechSynthesisUtterance(text);
+      msg.lang = "en-US";
+      msg.onend = callback || null;
+      speechSynthesis.speak(msg);
+    }
+
+    function listen(callback) {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.onresult = e => callback(e.results[0][0].transcript.toLowerCase());
+      recognition.start();
+    }
+
+    /* ========== Flow ========== */
+    window.onload = () => {
+      if (localStorage.getItem("resetVoice") === "true") {
+        localStorage.removeItem("resetVoice");
+        speak("Please say your new destination.", () => listen(speakDestination));
+      } else {
+        speak("Navigation mode activated. Please say your destination now.", speakDestination);
+      }
+    };
+
+    function speakDestination() {
+      let recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.onresult = e => {
+        let destination = e.results[0][0].transcript;
+        document.getElementById("destination-input").value = destination;
+        fetchCoordinates(destination);
+      };
+      recognition.start();
+      setTimeout(() => recognition.stop(), 30000);
+    }
+
+    function fetchCoordinates(destination) {
+      fetch('/get_coordinates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination: destination })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          speak(`Did you mean ${data.name}? Say yes to confirm.`, () => {
+            listen(answer => {
+              if (answer.includes("yes")) startNavigation(data.lat, data.lon, data.name);
+              else speak("Okay, please say the destination again.", speakDestination);
+            });
+          });
+        } else {
+          speak("Sorry, location not found.");
+        }
+      });
+    }
+
+    /* ========== Navigation Simulation ========== */
+    function startNavigation(lat, lon, name) {
+      speak(`Starting navigation to ${name}.`);
+      L.marker([lat, lon]).addTo(map).bindPopup(`Destination: ${name}`).openPopup();
+      L.polyline([[currentLat, currentLon], [lat, lon]], { color: 'blue' }).addTo(map);
+
+      simulateNavigation(lat, lon);
+      startDetection();
+      listenToStopCommand();
+    }
+
+    function simulateNavigation(destLat, destLon) {
+      let steps = 100, index = 0;
+      let dLat = (destLat - currentLat) / steps;
+      let dLon = (destLon - currentLon) / steps;
+
+      let navMarker = L.marker([currentLat, currentLon]).addTo(map);
+      let interval = setInterval(() => {
+        index++;
+        let newLat = currentLat + dLat * index;
+        let newLon = currentLon + dLon * index;
+        navMarker.setLatLng([newLat, newLon]);
+        if (index === Math.floor(steps / 2)) speak("You're halfway there.");
+        if (index >= steps) {
+          clearInterval(interval);
+          speak("You have arrived.");
+        }
+      }, 1000);
+    }
+
+    function startDetection() {
+      fetch('/start-detection')
+        .then(() => document.getElementById("status-message").innerText = "✅ Detection started!")
+        .catch(() => document.getElementById("status-message").innerText = "❌ Detection failed.");
+    }
+
+    function listenToStopCommand() {
+      setTimeout(() => {
+        listen(cmd => {
+          if (cmd.includes("stop")) {
+            speak("Stopping navigation. Say a new destination.");
+            localStorage.setItem("resetVoice", "true");
+            window.location.reload();
+          } else {
+            listenToStopCommand();
+          }
+        });
+      }, 10000);
+    }
   </script>
 </body>
 </html>
